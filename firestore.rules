@@ -1,0 +1,93 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 1. Global safety net: default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Reusable global helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128;
+    }
+    
+    function incoming() {
+      return request.resource.data;
+    }
+    
+    // Validation for Export Jobs
+    function isValidExportJob(data, isCreate) {
+      return ('status' in data && data.status is string && (data.status == 'pending' || data.status == 'waiting_inputs' || data.status == 'ready_to_generate' || data.status == 'completed' || data.status == 'failed'))
+        && ('imageA' in data && data.imageA is string)
+        && ('imageB' in data && data.imageB is string)
+        && ('imageC' in data && data.imageC is string)
+        && ('createdAt' in data && (!isCreate || data.createdAt == request.time))
+        && ('presetsFond' in data && data.presetsFond is map)
+        && ('metadataUtilisateur' in data && data.metadataUtilisateur is map)
+        // Optional logo URL
+        && (!('logo' in data) || data.logo == null || data.logo is string)
+        && (isCreate || !('imageFinal' in data) || data.imageFinal is string)
+        && (isCreate || !('errorMessage5' in data) || data.errorMessage5 is string)
+        && data.keys().size() <= 100;
+    }
+
+    // Simple, robust validation for Entry documents (avoids strict type/field mismatch blocks)
+    function isValidEntry(data) {
+      return data.keys().size() <= 100
+        && (!('userId' in data) || request.auth == null || data.userId == request.auth.uid);
+    }
+
+    // Exports collection rules (PWA-compositing jobs)
+    match /exports/{jobId} {
+      allow get: if isValidId(jobId);
+      allow list: if true;
+      allow create: if isValidId(jobId) 
+        && isValidExportJob(incoming(), true) 
+        && (incoming().status == 'pending' || incoming().status == 'waiting_inputs' || incoming().status == 'ready_to_generate');
+      allow update: if isValidId(jobId)
+        && isValidExportJob(incoming(), false)
+        && (
+          incoming().createdAt == resource.data.createdAt
+          && incoming().imageA == resource.data.imageA
+          && incoming().imageB == resource.data.imageB
+          && incoming().imageC == resource.data.imageC
+          && incoming().presetsFond == resource.data.presetsFond
+          && incoming().metadataUtilisateur == resource.data.metadataUtilisateur
+          && (!('logo' in incoming()) || !('logo' in resource.data) || incoming().logo == resource.data.logo)
+          && incoming().diff(resource.data).affectedKeys().hasOnly(['status', 'imageFinal', 'errorMessage5'])
+        );
+      allow delete: if false;
+    }
+
+    // Entries collection rules (branding preset configurations)
+    match /entries/{entryId} {
+      // Allow read to everyone (needed for the preset subscription / indexation)
+      allow get, list: if true;
+
+      // Allow write if signed in and checking userId matches request auth uid
+      allow create, update: if isSignedIn() 
+        && incoming().userId == request.auth.uid;
+      
+      // Allow delete if owner (when signed in)
+      allow delete: if isSignedIn() && resource != null && resource.data.userId == request.auth.uid;
+    }
+
+    // Prompts IA collection rules (AI prompts configuration)
+    match /prompts_ia/{promptId} {
+      // Allow read to everyone
+      allow get, list: if true;
+
+      // Allow write if signed in and checking userId matches request auth uid
+      allow create, update: if isSignedIn() 
+        && incoming().userId == request.auth.uid;
+      
+      // Allow delete if owner (when signed in)
+      allow delete: if isSignedIn() && resource != null && resource.data.userId == request.auth.uid;
+    }
+  }
+}

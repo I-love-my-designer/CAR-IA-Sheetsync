@@ -1,0 +1,68 @@
+{
+  "entities": {
+    "Entry": {
+      "title": "Entry",
+      "description": "A specific graphic configuration entry.",
+      "type": "object",
+      "properties": {
+        "imageId": { "type": "string", "description": "A/ IMAGE ID" },
+        "logo": { "type": "boolean", "description": "B/ LOGO (Toggle)" },
+        "logoSize": { "type": "string", "description": "C/ TAILLE" },
+        "logoColorFill": { "type": "string", "description": "E/ COLOR FILL" },
+        "logoColorFillEnabled": { "type": "boolean", "description": "E1/ LOGO COLOR FILL ACTIVE" },
+        "logoExtra": { "type": "string", "description": "F/ EXTRA" },
+        "logoX": { "type": "string", "description": "Logo X Coordinate (Reference 1280x1280)" },
+        "logoY": { "type": "string", "description": "Logo Y Coordinate (Reference 1280x1280)" },
+        "text": { "type": "boolean", "description": "G/ TEXTE (Toggle)" },
+        "textContent": { "type": "string", "description": "TEXT CONTENT" },
+        "textFont": { "type": "string", "description": "H/ POLICE" },
+        "textSize": { "type": "string", "description": "I/ TAILLE" },
+        "textAlign": { "type": "string", "description": "J/ ALIGNEMENT" },
+        "textColorFill": { "type": "string", "description": "L/ COLOR FILL" },
+        "textColorFillEnabled": { "type": "boolean", "description": "L1/ TEXT COLOR FILL ACTIVE" },
+        "textperspective": { "type": "string", "description": "M/ PERSPECTIVE" },
+        "textExtra": { "type": "string", "description": "N/ EXTRA" },
+        "textX": { "type": "string", "description": "Text X Coordinate (Reference 1280x1280)" },
+        "textY": { "type": "string", "description": "Text Y Coordinate (Reference 1280x1280)" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Submission timestamp" },
+        "userId": { "type": "string", "description": "ID of the user who submitted" }
+      },
+      "required": [
+        "imageId", "logo", "logoSize", "logoColorFill", "logoExtra",
+        "logoX", "logoY",
+        "text", "textContent", "textFont", "textSize", "textAlign", "textColorFill", "textperspective", "textExtra",
+        "textX", "textY",
+        "createdAt", "userId"
+      ]
+    },
+    "PromptIA": {
+      "title": "PromptIA",
+      "description": "An AI Prompt preset configuration.",
+      "type": "object",
+      "properties": {
+        "promptName": { "type": "string", "description": "The custom name of the prompt preset" },
+        "promptImageA": { "type": "string", "description": "Prompt for Background Image A" },
+        "promptImageB": { "type": "string", "description": "Prompt for Vehicle Image B" },
+        "promptImageC": { "type": "string", "description": "Prompt for Reference Image C (JPG compressed)" },
+        "promptLogo": { "type": "string", "description": "Prompt for Logo styling" },
+        "promptGeneral": { "type": "string", "description": "Shared general description prompt" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Submission timestamp" },
+        "userId": { "type": "string", "description": "ID of the user who submitted" }
+      },
+      "required": [
+        "promptName", "promptImageA", "promptImageB", "promptImageC", "promptLogo", "promptGeneral",
+        "createdAt", "userId"
+      ]
+    }
+  },
+  "firestore": {
+    "/entries/{entryId}": {
+      "schema": "Entry",
+      "description": "Collection of all graphic configuration entries."
+    },
+    "/prompts_ia/{promptId}": {
+      "schema": "PromptIA",
+      "description": "Collection of AI prompt preset configurations."
+    }
+  }
+}
