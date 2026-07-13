@@ -6,3 +6,7 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# macOS AppleDouble artifacts (volume exFAT/NTFS)
+._*
+.DS_Store

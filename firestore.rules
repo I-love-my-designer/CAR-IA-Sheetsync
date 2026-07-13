@@ -1,13 +1,19 @@
+// =============================================================================
+// RÈGLES FIRESTORE UNIFIÉES — CAR IA (PWA) + CAR-IA-APP_API (moteur/panneau)
+// Ce fichier doit rester IDENTIQUE dans les deux dépôts.
+// Source de vérité pour le déploiement : CAR-IA-APP_API
+//   firebase deploy --only firestore:rules,storage
+// =============================================================================
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // 1. Global safety net: default-deny catch-all
+    // 1. Protection globale par défaut
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Reusable global helpers
+    // Utilitaires de validation réutilisables
     function isSignedIn() {
       return request.auth != null;
     }
@@ -20,74 +26,131 @@ service cloud.firestore {
       return request.resource.data;
     }
     
-    // Validation for Export Jobs
+    // Validation stricte des jobs d'exportation d'images
     function isValidExportJob(data, isCreate) {
-      return ('status' in data && data.status is string && (data.status == 'pending' || data.status == 'waiting_inputs' || data.status == 'ready_to_generate' || data.status == 'completed' || data.status == 'failed'))
-        && ('imageA' in data && data.imageA is string)
-        && ('imageB' in data && data.imageB is string)
-        && ('imageC' in data && data.imageC is string)
-        && ('createdAt' in data && (!isCreate || data.createdAt == request.time))
-        && ('presetsFond' in data && data.presetsFond is map)
-        && ('metadataUtilisateur' in data && data.metadataUtilisateur is map)
-        // Optional logo URL
+      return (!('status' in data) || (data.status is string && (data.status == 'pending' || data.status == 'waiting_inputs' || data.status == 'ready_to_generate' || data.status == 'processing' || data.status == 'completed' || data.status == 'failed')))
+        && (!('imageA' in data) || data.imageA is string)
+        && (!('imageB' in data) || data.imageB is string)
+        && (!('imageC' in data) || data.imageC is string)
+        && (!('fond' in data) || data.fond is string)
+        && (!('preview' in data) || data.preview is string)
+        && (!('vehicule' in data) || data.vehicule is string)
+        && (!('createdAt' in data) || data.createdAt != null)
+        && (!('presetsFond' in data) || data.presetsFond is map)
+        && (!('metadataUtilisateur' in data) || data.metadataUtilisateur is map)
         && (!('logo' in data) || data.logo == null || data.logo is string)
         && (isCreate || !('imageFinal' in data) || data.imageFinal is string)
         && (isCreate || !('errorMessage5' in data) || data.errorMessage5 is string)
-        && data.keys().size() <= 100;
+        && (isCreate || !('progress' in data) || data.progress == null || data.progress is int || data.progress is float || data.progress is number)
+        && (isCreate || !('url' in data) || data.url == null || data.url is string)
+        && (isCreate || !('completedAt' in data) || data.completedAt == null || data.completedAt is string)
+        // La PWA envoie ~33 champs à la création et le panneau/moteur en ajoute
+        // ~5 pendant le traitement : 60 laisse de la marge sans ouvrir la porte
+        // à des documents arbitrairement gros.
+        && data.keys().size() <= 60;
     }
 
-    // Simple, robust validation for Entry documents (avoids strict type/field mismatch blocks)
+    // Validation des données de presets (Entries / entries)
     function isValidEntry(data) {
-      return data.keys().size() <= 100
-        && (!('userId' in data) || request.auth == null || data.userId == request.auth.uid);
+      return data.keys().hasAll([
+        'imageId', 'logo', 'imageSize', 'imagePosition', 'imageColorFill', 'imageExtra',
+        'logoX', 'logoY',
+        'textEnabled', 'textFont', 'textSize', 'textAlign', 'textPosition', 'textColorFill', 'perspective', 'textExtra',
+        'textX', 'textY',
+        'createdAt'
+      ])
+        && ((request.auth == null && data.keys().size() == 19) || (request.auth != null && 'userId' in data && data.userId == request.auth.uid && data.keys().size() == 20))
+        && data.imageId is string && data.imageId.size() <= 100
+        && data.logo is bool
+        && data.imageSize is string && data.imageSize.size() <= 100
+        && data.imagePosition is string && data.imagePosition.size() <= 100
+        && data.imageColorFill is string && data.imageColorFill.size() <= 100
+        && data.imageExtra is string && data.imageExtra.size() <= 500
+        && data.logoX is string && data.logoX.size() <= 100
+        && data.logoY is string && data.logoY.size() <= 100
+        && data.textEnabled is bool
+        && data.textFont is string && data.textFont.size() <= 100
+        && data.textSize is string && data.textSize.size() <= 100
+        && data.textAlign is string && data.textAlign.size() <= 100
+        && data.textPosition is string && data.textPosition.size() <= 100
+        && data.textColorFill is string && data.textColorFill.size() <= 100
+        && data.perspective is string && data.perspective.size() <= 100
+        && data.textExtra is string && data.textExtra.size() <= 500
+        && data.textX is string && data.textX.size() <= 100
+        && data.textY is string && data.textY.size() <= 100
+        && data.createdAt == request.time;
     }
 
-    // Exports collection rules (PWA-compositing jobs)
+    // Règles de la collection 'exports' (Jobs de compositing de la PWA).
+    // Lecture publique (le panneau écoute en temps réel sans authentification),
+    // mais toute écriture doit respecter le schéma isValidExportJob.
     match /exports/{jobId} {
-      allow get: if isValidId(jobId);
-      allow list: if true;
-      allow create: if isValidId(jobId) 
-        && isValidExportJob(incoming(), true) 
-        && (incoming().status == 'pending' || incoming().status == 'waiting_inputs' || incoming().status == 'ready_to_generate');
-      allow update: if isValidId(jobId)
-        && isValidExportJob(incoming(), false)
-        && (
-          incoming().createdAt == resource.data.createdAt
-          && incoming().imageA == resource.data.imageA
-          && incoming().imageB == resource.data.imageB
-          && incoming().imageC == resource.data.imageC
-          && incoming().presetsFond == resource.data.presetsFond
-          && incoming().metadataUtilisateur == resource.data.metadataUtilisateur
-          && (!('logo' in incoming()) || !('logo' in resource.data) || incoming().logo == resource.data.logo)
-          && incoming().diff(resource.data).affectedKeys().hasOnly(['status', 'imageFinal', 'errorMessage5'])
-        );
-      allow delete: if false;
+      allow read: if true;
+      allow create: if isValidId(jobId) && isValidExportJob(incoming(), true);
+      allow update: if isValidId(jobId) && isValidExportJob(incoming(), false);
+      allow delete: if true;
     }
 
-    // Entries collection rules (branding preset configurations)
-    match /entries/{entryId} {
-      // Allow read to everyone (needed for the preset subscription / indexation)
-      allow get, list: if true;
-
-      // Allow write if signed in and checking userId matches request auth uid
-      allow create, update: if isSignedIn() 
-        && incoming().userId == request.auth.uid;
-      
-      // Allow delete if owner (when signed in)
-      allow delete: if isSignedIn() && resource != null && resource.data.userId == request.auth.uid;
-    }
-
-    // Prompts IA collection rules (AI prompts configuration)
+    // Règles pour la collection 'prompts_ia' : lecture publique, écritures
+    // bornées (id valide + taille de document limitée)
     match /prompts_ia/{promptId} {
-      // Allow read to everyone
-      allow get, list: if true;
+      allow read: if true;
+      allow create, update: if isValidId(promptId) && incoming().keys().size() <= 30;
+      allow delete: if true;
+    }
 
-      // Allow write if signed in and checking userId matches request auth uid
-      allow create, update: if isSignedIn() 
-        && incoming().userId == request.auth.uid;
-      
-      // Allow delete if owner (when signed in)
-      allow delete: if isSignedIn() && resource != null && resource.data.userId == request.auth.uid;
+    // Règles pour la collection 'entries' (Minuscule)
+    match /entries/{entryId} {
+      allow read, get, list: if true;
+      // Écriture par le propriétaire (éditeur Sheetsync). Le schéma des tables évolue
+      // (logoX/Y, textX/Y, resolutionRef, promptIA, *ColorFillEnabled, *Prompt…), donc on
+      // valide par propriété + taille bornée plutôt que par une liste de champs figée.
+      allow create, update: if isValidId(entryId) && isSignedIn()
+        && incoming().userId == request.auth.uid
+        && incoming().keys().size() <= 45;
+      // Une entrée anonyme (sans userId) reste supprimable par tous ;
+      // une entrée possédée ne peut être supprimée que par son propriétaire.
+      allow delete: if resource == null
+        || !("userId" in resource.data)
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
+    }
+
+    // Règles pour la collection 'Entries' (Majuscule - AJOUTÉ pour résoudre l'erreur)
+    match /Entries/{entryId} {
+      allow read, get, list: if true;
+      // Écriture par le propriétaire (éditeur Sheetsync). Le schéma des tables évolue
+      // (logoX/Y, textX/Y, resolutionRef, promptIA, *ColorFillEnabled, *Prompt…), donc on
+      // valide par propriété + taille bornée plutôt que par une liste de champs figée.
+      allow create, update: if isValidId(entryId) && isSignedIn()
+        && incoming().userId == request.auth.uid
+        && incoming().keys().size() <= 45;
+      // Une entrée anonyme (sans userId) reste supprimable par tous ;
+      // une entrée possédée ne peut être supprimée que par son propriétaire.
+      allow delete: if resource == null
+        || !("userId" in resource.data)
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
+    }
+
+    // Profil / abonnement de l'utilisateur. Chacun lit UNIQUEMENT son propre document.
+    // L'écriture (champ d'abonnement 'plan' / 'entitled') est réservée au serveur
+    // (admin SDK / futur webhook Stripe) : le client ne peut pas s'auto-attribuer un abonnement.
+    match /users/{uid} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // Historique des générations — chacun lit UNIQUEMENT les siennes (filtre userId).
+    // Écrit par le serveur/moteur (accès admin) : le client est en lecture seule.
+    match /generations_history/{docId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow write: if false;
+    }
+
+    // Brand Kit d'un utilisateur (logo + couleur + slogan). Lecture ET écriture
+    // réservées au propriétaire — c'est SON contenu, il le gère depuis la PWA.
+    match /brand_kits/{uid} {
+      allow read, write: if isSignedIn() && request.auth.uid == uid
+        && incoming().keys().size() <= 15;
     }
   }
 }

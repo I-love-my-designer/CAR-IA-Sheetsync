@@ -56,6 +56,10 @@ interface Entry {
   logoPromptActive?: boolean;
   imageSize?: string;
   imageColorFill?: string;
+  // Autorise le changement de couleur du fond (néon/LED) côté PWA. Défaut : non.
+  imageColorFillEnabled?: boolean;
+  // Portée quand autorisé : false = néon seul ; true = néon + murs de la même teinte.
+  imageColorFillWalls?: boolean;
   imageExtra?: string;
   logoX: string;
   logoY: string;
@@ -207,7 +211,9 @@ const isEntryChanged = (entry: Entry | undefined, formData: any): boolean => {
     getNorm(entryTextPrompt) !== getNorm(formData.textPrompt) ||
     !!entryTextPromptActive !== !!formData.textPromptActive ||
     getNorm(entry.textX) !== getNorm(formData.textX) ||
-    getNorm(entry.textY) !== getNorm(formData.textY)
+    getNorm(entry.textY) !== getNorm(formData.textY) ||
+    (entry.imageColorFillEnabled !== undefined ? !!entry.imageColorFillEnabled : false) !== !!formData.imageColorFillEnabled ||
+    (entry.imageColorFillWalls !== undefined ? !!entry.imageColorFillWalls : false) !== !!formData.imageColorFillWalls
   );
 };
 
@@ -739,6 +745,8 @@ export default function App() {
     imageId: '',
     resolutionRef: '1280',
     promptIA: '',
+    imageColorFillEnabled: false,
+    imageColorFillWalls: false,
     logo: true,
     logoSize: '',
     logoColorFill: '',
@@ -1030,6 +1038,8 @@ export default function App() {
         imageId: entry.imageId || '',
         resolutionRef: entry.resolutionRef || '1280',
         promptIA: entry.promptIA || '',
+        imageColorFillEnabled: entry.imageColorFillEnabled !== undefined ? !!entry.imageColorFillEnabled : false,
+        imageColorFillWalls: entry.imageColorFillWalls !== undefined ? !!entry.imageColorFillWalls : false,
         logo: !!entry.logo,
         logoSize: entry.logoSize !== undefined ? entry.logoSize : (entry.imageSize || ''),
         logoColorFill: entry.logoColorFill !== undefined ? entry.logoColorFill : (entry.imageColorFill || ''),
@@ -1059,6 +1069,8 @@ export default function App() {
         imageId: '',
         resolutionRef: '1280',
         promptIA: '',
+        imageColorFillEnabled: false,
+        imageColorFillWalls: false,
         logo: true,
         logoSize: '',
         logoColorFill: '',
@@ -2539,6 +2551,51 @@ export default function App() {
                             </div>
                           )}
                         </div>
+                      </div>
+                    );
+                  })}
+
+                  <div className="flex items-center gap-3 pt-2">
+                    <div className="h-[1px] flex-grow bg-emerald-100"></div>
+                    <span className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.2em]">Couleur du fond</span>
+                    <div className="h-[1px] flex-grow bg-emerald-100"></div>
+                  </div>
+
+                  {[
+                    { id: 'M1', label: 'COULEUR DU FOND MODIFIABLE', key: 'imageColorFillEnabled' },
+                    ...(formData.imageColorFillEnabled
+                      ? [{ id: 'M2', label: 'INCLURE MURS DE MÊME TEINTE', key: 'imageColorFillWalls' }]
+                      : []),
+                  ].map((field) => {
+                    const val = (formData as any)[field.key];
+                    return (
+                      <div key={field.id} className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                            <span className={`w-4 h-4 rounded-sm flex items-center justify-center text-[8px] transition-colors ${isSaving ? 'bg-emerald-500 text-white' : 'bg-slate-900 text-white'}`}>
+                              {field.id}
+                            </span>
+                            {field.label}
+                          </label>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleFormChange(field.key, !val)}
+                          className={`w-full h-8 px-3 rounded-lg flex items-center justify-between transition-all border ${val ? 'bg-emerald-500 border-emerald-600 text-white font-bold' : 'bg-slate-100 border-slate-200 text-slate-400'}`}
+                        >
+                          <span className="text-[10px] uppercase tracking-widest">{val ? 'ON' : 'OFF'}</span>
+                          <div className="w-4 h-4 rounded-full bg-white shadow-sm" />
+                        </button>
+                        {field.key === 'imageColorFillWalls' && (
+                          <span className="text-[9px] text-slate-500 italic block leading-snug">
+                            ON = recolore le néon ET les murs de la même teinte. OFF = néon seul. (Jamais toute l'image.)
+                          </span>
+                        )}
+                        {field.key === 'imageColorFillEnabled' && !val && (
+                          <span className="text-[9px] text-slate-400 italic block leading-snug">
+                            OFF = l'utilisateur ne peut pas changer la couleur de ce fond.
+                          </span>
+                        )}
                       </div>
                     );
                   })}
