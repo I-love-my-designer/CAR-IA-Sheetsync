@@ -60,6 +60,8 @@ interface Entry {
   imageColorFillEnabled?: boolean;
   // Portée quand autorisé : false = néon seul ; true = néon + murs de la même teinte.
   imageColorFillWalls?: boolean;
+  // Réflexion du véhicule sur le sol : 'none' (aucune), 'light' (légère), 'mirror' (effet miroir).
+  groundReflection?: string;
   imageExtra?: string;
   logoX: string;
   logoY: string;
@@ -213,7 +215,8 @@ const isEntryChanged = (entry: Entry | undefined, formData: any): boolean => {
     getNorm(entry.textX) !== getNorm(formData.textX) ||
     getNorm(entry.textY) !== getNorm(formData.textY) ||
     (entry.imageColorFillEnabled !== undefined ? !!entry.imageColorFillEnabled : false) !== !!formData.imageColorFillEnabled ||
-    (entry.imageColorFillWalls !== undefined ? !!entry.imageColorFillWalls : false) !== !!formData.imageColorFillWalls
+    (entry.imageColorFillWalls !== undefined ? !!entry.imageColorFillWalls : false) !== !!formData.imageColorFillWalls ||
+    (entry.groundReflection || 'none') !== (formData.groundReflection || 'none')
   );
 };
 
@@ -747,6 +750,7 @@ export default function App() {
     promptIA: '',
     imageColorFillEnabled: false,
     imageColorFillWalls: false,
+    groundReflection: 'none',
     logo: true,
     logoSize: '',
     logoColorFill: '',
@@ -1040,6 +1044,7 @@ export default function App() {
         promptIA: entry.promptIA || '',
         imageColorFillEnabled: entry.imageColorFillEnabled !== undefined ? !!entry.imageColorFillEnabled : false,
         imageColorFillWalls: entry.imageColorFillWalls !== undefined ? !!entry.imageColorFillWalls : false,
+        groundReflection: entry.groundReflection || 'none',
         logo: !!entry.logo,
         logoSize: entry.logoSize !== undefined ? entry.logoSize : (entry.imageSize || ''),
         logoColorFill: entry.logoColorFill !== undefined ? entry.logoColorFill : (entry.imageColorFill || ''),
@@ -1071,6 +1076,7 @@ export default function App() {
         promptIA: '',
         imageColorFillEnabled: false,
         imageColorFillWalls: false,
+        groundReflection: 'none',
         logo: true,
         logoSize: '',
         logoColorFill: '',
@@ -2599,6 +2605,44 @@ export default function App() {
                       </div>
                     );
                   })}
+
+                  <div className="flex items-center gap-3 pt-2">
+                    <div className="h-[1px] flex-grow bg-cyan-100"></div>
+                    <span className="text-[10px] font-black text-cyan-600 uppercase tracking-[0.2em]">Réflexion au sol</span>
+                    <div className="h-[1px] flex-grow bg-cyan-100"></div>
+                  </div>
+
+                  {/* Réflexion du véhicule sur le sol — injectée dans le prompt
+                      Gemini par l'app-API (aucune / légère / effet miroir). */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                      <span className={`w-4 h-4 rounded-sm flex items-center justify-center text-[8px] transition-colors ${isSaving ? 'bg-emerald-500 text-white' : 'bg-slate-900 text-white'}`}>R</span>
+                      RÉFLEXION DU VÉHICULE SUR LE SOL
+                    </label>
+                    <div className="grid grid-cols-3 gap-1">
+                      {[
+                        { value: 'none', label: 'AUCUNE' },
+                        { value: 'light', label: 'LÉGÈRE' },
+                        { value: 'mirror', label: 'MIROIR' },
+                      ].map((opt) => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => handleFormChange('groundReflection', opt.value)}
+                          className={`h-8 rounded-lg border text-[10px] uppercase tracking-widest transition-all ${
+                            (formData.groundReflection || 'none') === opt.value
+                              ? 'bg-cyan-600 border-cyan-700 text-white font-bold'
+                              : 'bg-slate-100 border-slate-200 text-slate-400'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                    <span className="text-[9px] text-slate-500 italic block leading-snug">
+                      LÉGÈRE = reflet doux et réaliste · MIROIR = sol poli type showroom. Appliqué par l'IA à la génération.
+                    </span>
+                  </div>
 
                   <div className="flex items-center gap-3 pt-2">
                     <div className="h-[1px] flex-grow bg-blue-100"></div>
